@@ -19,3 +19,17 @@ class Qubit():
     def get_current_fidelity(self):
         return self._current_fidelity
     
+    def apply_x(self):
+        """Aplica a porta X (NOT) ao qubit."""
+        self._qubit_state = 1 if self._qubit_state == 0 else 0
+        
+    def apply_hadamard(self):
+        """Aplica a porta Hadamard (H) ao qubit."""
+        if self._qubit_state == 0:
+            self._qubit_state = random.choice([0, 1])
+        else:
+            self._qubit_state = random.choice([0, 1])
+        
+    def measure(self):
+        """Realiza a medição do qubit no estado atual."""
+        return self._qubit_state
