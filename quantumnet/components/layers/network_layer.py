@@ -14,8 +14,8 @@ class NetworkLayer:
             link_layer : LinkLayer : Camada de enlace.
         """
         self._network = network
-        self._link_layer = link_layer
         self._physical_layer = physical_layer
+        self._link_layer = link_layer
         self.logger = Logger.get_instance()
 
     def __str__(self):

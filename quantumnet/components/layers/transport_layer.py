@@ -15,9 +15,9 @@ class TransportLayer:
             physical_layer : PhysicalLayer : Camada física.
         """
         self._network = network
+        self._physical_layer = physical_layer
         self._network_layer = network_layer
         self._link_layer = link_layer
-        self._physical_layer = physical_layer
         self.logger = Logger.get_instance()
         self.transmitted_qubits = []
 
