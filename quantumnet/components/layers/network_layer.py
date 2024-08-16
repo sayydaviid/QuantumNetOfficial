@@ -12,6 +12,7 @@ class NetworkLayer:
         args:
             network : Network : Rede.
             link_layer : LinkLayer : Camada de enlace.
+            physical_layer : PhysicalLayer : Camada física.
         """
         self._network = network
         self._physical_layer = physical_layer
@@ -23,9 +24,9 @@ class NetworkLayer:
         
         returns:
             str : Representação em string da camada de rede."""
-        return f'Network Layer'
+        return 'Network Layer'
     
-    def verify_channels(self):
+    def verify_channels(self) -> bool:
         """
         Verifica se todos os canais possuem pelo menos um par EPR.
 
@@ -34,13 +35,12 @@ class NetworkLayer:
         """
         for edge in self._network.graph.edges:
             if len(self._network.get_eprs_from_edge(edge[0], edge[1])) == 0:
-                self.logger.log(f'No EPR pairs between {edge[0]} and {edge[1]}')
+                self.logger.log(f'Sem pares EPRs entre {edge[0]} e {edge[1]}')
                 return False
-        self.logger.log(f'Há pelo menos 1 par EPR nesses canais')
+        self.logger.log('Há pelo menos 1 par EPR nesses canais')
         return True
     
-
-    def verify_nodes(self):
+    def verify_nodes(self) -> bool:
         """
         Verifica se todos os nós possuem pelo menos 2 qubits.
         
@@ -50,12 +50,12 @@ class NetworkLayer:
         for node in self._network.graph.nodes:
             host = self._network.get_host(node)
             if len(host.memory) < 2:
-                self.logger.log(f'Nós {node} não apresentam nem 2 qubits pelo menos')
+                self.logger.log(f'Nó {node} não possui pelo menos 2 qubits')
                 return False
         self.logger.log('Todos os nós possuem pelo menos 2 qubits')
         return True
 
-    def short_route_valid(self, Alice: int, Bob: int):
+    def short_route_valid(self, Alice: int, Bob: int) -> list:
         """
         Escolhe a melhor rota entre dois hosts com critérios adicionais.
         
@@ -75,43 +75,34 @@ class NetworkLayer:
             return None
         
         try:
-            # Calcula todas as menores rotas entre Alice e Bob
             all_shortest_paths = list(nx.all_shortest_paths(self._network.graph, Alice, Bob))
         except nx.NetworkXNoPath:
             self.logger.log(f'Sem rota encontrada entre {Alice} e {Bob}')
             return None
         
-        # Verifica cada rota encontrada
         for path in all_shortest_paths:
             valid_path = True
-            # Verifica cada canal (aresta) na rota
             for i in range(len(path) - 1):
                 node = path[i]
                 next_node = path[i + 1]
-                # Verifica se o canal possui pelo menos 1 par EPR
                 if len(self._network.get_eprs_from_edge(node, next_node)) < 1:
-                    self.logger.log(f'Sem pares Eprs entre {node} e {next_node} na rota {path}')
+                    self.logger.log(f'Sem pares EPRs entre {node} e {next_node} na rota {path}')
                     valid_path = False
                     break
-                # Verifica se o nó possui pelo menos 2 qubits
                 host = self._network.get_host(node)
                 if len(host.memory) < 2:
                     self.logger.log(f'Nó {node} não tem pelo menos 2 qubits na rota {path}')
                     valid_path = False
                     break
             
-            # Se encontrou uma rota válida, retorna essa rota
             if valid_path:
                 self.logger.log(f'Rota válida encontrada: {path}')
                 return path
         
-        # Se não encontrou nenhuma rota válida
         self.logger.log('Nenhuma rota válida encontrada.')
         return None
 
-    
-
-    def entanglement_swapping(self, Alice=None, Bob=None):
+    def entanglement_swapping(self, Alice: int = None, Bob: int = None) -> bool:
         """
         Realiza o Entanglement Swapping em toda a rota determinada pelo short_route_valid.
         
@@ -122,28 +113,18 @@ class NetworkLayer:
         returns:
             bool: True se todos os Entanglement Swappings foram bem-sucedidos, False caso contrário.
         """
-        # Determina a rota usando short_route_valid se Alice e Bob não forem fornecidos
-        if Alice is None or Bob is None:
-            route = self.short_route_valid(Alice, Bob)
-            if route is None or len(route) < 2:
-                self.logger.log('Não foi possível determinar uma rota válida.')
-                return False
-            Alice = route[0]
-            Bob = route[-1]
-        else:
-            route = self.short_route_valid(Alice, Bob)
-            if route is None or len(route) < 2:
-                self.logger.log('Não foi possível determinar uma rota válida.')
-                return False
+        route = self.short_route_valid(Alice, Bob)
+        if route is None or len(route) < 2:
+            self.logger.log('Não foi possível determinar uma rota válida.')
+            return False
 
-        # Realiza o Entanglement Swapping em toda a rota por pares
+        Alice = route[0]
+        Bob = route[-1]
+
         while len(route) > 1:
             node1 = route[0]
             node2 = route[1]
-            if len(route) > 2:
-                node3 = route[2]
-            else:
-                node3 = None
+            node3 = route[2] if len(route) > 2 else None
 
             if not self._network.graph.has_edge(node1, node2):
                 self.logger.log(f'Canal entre {node1}-{node2} não existe')
@@ -166,24 +147,20 @@ class NetworkLayer:
                     self.logger.log(f'Não há pares EPRs suficientes entre {node2}-{node3}')
                     return False
 
-                #Adquirir a fidelidade dos pares EPRs obtidos 
                 fidelity1 = epr1.get_current_fidelity()
                 fidelity2 = epr2.get_current_fidelity()
                 
-                #Probabilidade de sucesso do entanglement swapping 
                 success_prob = fidelity1 * fidelity2 + (1 - fidelity1) * (1 - fidelity2)
                 if uniform(0, 1) > success_prob:
                     self.logger.log(f'Entanglement Swapping falhou entre {node1}-{node2} e {node2}-{node3}')
                     return False
 
-                #Registra e calcula uma nova fidelidade e cria um novo par EPR virtual com essa fidelidade
                 new_fidelity = (fidelity1 * fidelity2) / ((fidelity1 * fidelity2) + (1 - fidelity1) * (1 - fidelity2))
                 epr_virtual = Epr((node1, node3), new_fidelity)
 
                 if not self._network.graph.has_edge(node1, node3):
                     self._network.graph.add_edge(node1, node3, eprs=[])
 
-                #Adiciona o par EPR virtual ao canal entre os nós e remore os pares EPRs originais do canal
                 self._network.physical.add_epr_to_channel(epr_virtual, (node1, node3))
                 self._network.physical.remove_epr_from_channel(epr1, (node1, node2))
                 self._network.physical.remove_epr_from_channel(epr2, (node2, node3))
