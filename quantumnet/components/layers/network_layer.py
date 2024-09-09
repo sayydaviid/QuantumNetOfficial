@@ -3,7 +3,6 @@ from quantumnet.components import Host
 from quantumnet.objects import Logger, Epr
 from random import uniform
 
-
 class NetworkLayer:
     def __init__(self, network, link_layer, physical_layer):
         """
@@ -18,6 +17,10 @@ class NetworkLayer:
         self._physical_layer = physical_layer
         self._link_layer = link_layer
         self.logger = Logger.get_instance()
+        self.timeslot = 0  # Inicializa o contador de timeslots
+        self.avg_size_routes = 0  # Inicializa o tamanho médio das rotas
+        self.used_eprs = 0  # Inicializa o contador de EPRs utilizados
+        self.used_qubits = 0  # Inicializa o contador de Qubits utilizados
 
     def __str__(self):
         """ Retorna a representação em string da camada de rede. 
@@ -26,34 +29,18 @@ class NetworkLayer:
             str : Representação em string da camada de rede."""
         return 'Network Layer'
     
-    def verify_channels(self) -> bool:
-        """
-        Verifica se todos os canais possuem pelo menos um par EPR.
+    def get_timeslot(self):
+        self.logger.debug(f"Timeslot atual na camada {self.__class__.__name__}: {self.timeslot}")
+        return self.timeslot
 
-        Returns:
-            bool: True se todos os canais tiverem pelo menos um par EPR, False caso contrário.
-        """
-        for edge in self._network.graph.edges:
-            if len(self._network.get_eprs_from_edge(edge[0], edge[1])) == 0:
-                self.logger.log(f'Sem pares EPRs entre {edge[0]} e {edge[1]}')
-                return False
-        self.logger.log('Há pelo menos 1 par EPR nesses canais')
-        return True
+    def get_used_eprs(self):
+        """Retorna a contagem de EPRs utilizados na camada de rede."""
+        self.logger.debug(f"Eprs usados na camada {self.__class__.__name__}: {self.used_eprs}")
+        return self.used_eprs
     
-    def verify_nodes(self) -> bool:
-        """
-        Verifica se todos os nós possuem pelo menos 2 qubits.
-        
-        Returns:
-            bool : True se todos os nós possuem pelo menos 2 qubits, False caso contrário.
-        """
-        for node in self._network.graph.nodes:
-            host = self._network.get_host(node)
-            if len(host.memory) < 2:
-                self.logger.log(f'Nó {node} não possui pelo menos 2 qubits')
-                return False
-        self.logger.log('Todos os nós possuem pelo menos 2 qubits')
-        return True
+    def get_used_qubits(self):
+        self.logger.debug(f"Qubits usados na camada {self.__class__.__name__}: {self.used_qubits}")
+        return self.used_qubits
 
     def short_route_valid(self, Alice: int, Bob: int) -> list:
         """
@@ -113,61 +100,121 @@ class NetworkLayer:
         returns:
             bool: True se todos os Entanglement Swappings foram bem-sucedidos, False caso contrário.
         """
+
+        # Obtém a rota válida entre Alice e Bob usando a função short_route_valid
         route = self.short_route_valid(Alice, Bob)
+        
+        # Verifica se uma rota válida foi encontrada e se ela tem pelo menos 2 nós
         if route is None or len(route) < 2:
             self.logger.log('Não foi possível determinar uma rota válida.')
             return False
 
+        # Define Alice e Bob como o primeiro e o último nó da rota, respectivamente
         Alice = route[0]
         Bob = route[-1]
 
+        # Itera sobre a rota realizando o entanglement swapping para cada segmento da rota
         while len(route) > 1:
-            node1 = route[0]
-            node2 = route[1]
-            node3 = route[2] if len(route) > 2 else None
+            # Incrementa o timeslot para cada operação de entanglement swapping
+            self.timeslot += 1
+            node1 = route[0]    # Primeiro nó na rota
+            node2 = route[1]    # Segundo nó na rota
+            node3 = route[2] if len(route) > 2 else None  # Terceiro nó na rota (se existir)
 
+            # Verifica se existe um canal entre node1 e node2
             if not self._network.graph.has_edge(node1, node2):
                 self.logger.log(f'Canal entre {node1}-{node2} não existe')
                 return False
 
             try:
+                # Obtém o primeiro par EPR entre node1 e node2
                 epr1 = self._network.get_eprs_from_edge(node1, node2)[0]
             except IndexError:
+                # Se não houver pares EPR suficientes, loga a falha e retorna False
                 self.logger.log(f'Não há pares EPRs suficientes entre {node1}-{node2}')
                 return False
 
+            # Se houver um terceiro nó, realiza o swapping entre node1, node2 e node3
             if node3 is not None:
+                # Verifica se existe um canal entre node2 e node3
                 if not self._network.graph.has_edge(node2, node3):
                     self.logger.log(f'Canal entre {node2}-{node3} não existe')
                     return False
 
                 try:
+                    # Obtém o primeiro par EPR entre node2 e node3
                     epr2 = self._network.get_eprs_from_edge(node2, node3)[0]
                 except IndexError:
+                    # Se não houver pares EPR suficientes, loga a falha e retorna False
                     self.logger.log(f'Não há pares EPRs suficientes entre {node2}-{node3}')
                     return False
 
+                # Mede a fidelidade dos pares EPR
                 fidelity1 = epr1.get_current_fidelity()
                 fidelity2 = epr2.get_current_fidelity()
                 
+                # Calcula a probabilidade de sucesso do entanglement swapping
                 success_prob = fidelity1 * fidelity2 + (1 - fidelity1) * (1 - fidelity2)
+                
+                # Verifica se o swapping foi bem-sucedido com base na probabilidade de sucesso
                 if uniform(0, 1) > success_prob:
                     self.logger.log(f'Entanglement Swapping falhou entre {node1}-{node2} e {node2}-{node3}')
                     return False
 
+                # Calcula a nova fidelidade do par EPR virtual
                 new_fidelity = (fidelity1 * fidelity2) / ((fidelity1 * fidelity2) + (1 - fidelity1) * (1 - fidelity2))
                 epr_virtual = Epr((node1, node3), new_fidelity)
 
+                # Se o canal entre node1 e node3 não existir, adiciona um novo canal
                 if not self._network.graph.has_edge(node1, node3):
                     self._network.graph.add_edge(node1, node3, eprs=[])
 
+                # Adiciona o par EPR virtual ao canal entre node1 e node3
                 self._network.physical.add_epr_to_channel(epr_virtual, (node1, node3))
+                # Remove os pares EPR antigos dos canais entre node1-node2 e node2-node3
                 self._network.physical.remove_epr_from_channel(epr1, (node1, node2))
                 self._network.physical.remove_epr_from_channel(epr2, (node2, node3))
 
+                # Atualiza o contador de EPRs utilizados
+                self.used_eprs += 1
+
+                # Remove o segundo nó da rota, pois o swapping foi realizado
                 route.pop(1)
             else:
+                # Se não há um terceiro nó, apenas remove o segundo nó da rota
                 route.pop(1)
 
+        # Loga o sucesso do entanglement swapping
         self.logger.log(f'Entanglement Swapping concluído com sucesso entre {Alice} e {Bob}')
         return True
+    
+    def get_avg_size_routes(self):
+        """
+        Calcula o tamanho médio das rotas entre todos os pares de nós no grafo.
+        
+        returns:
+            float: Tamanho médio das rotas.
+        """
+        total_size = 0
+        num_routes = 0
+        
+        # Itera sobre todos os pares de nós no grafo
+        for node1 in self._network.graph.nodes:
+            for node2 in self._network.graph.nodes:
+                if node1 != node2:
+                    # Obtém a rota mais curta entre node1 e node2
+                    route = self.short_route_valid(node1, node2)
+                    
+                    # Se uma rota válida for encontrada, soma o comprimento da rota
+                    if route is not None:
+                        total_size += len(route)
+                        num_routes += 1
+        
+        # Calcula a média, se houver rotas válidas
+        if num_routes > 0:
+            self._avg_size_routes = total_size / num_routes
+        else:
+            # Retorna 0 se não houver rotas válidas
+            self._avg_size_routes = 0.0
+        
+        return self._avg_size_routes

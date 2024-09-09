@@ -3,7 +3,8 @@ from ..objects import Logger, Qubit
 from ..components import Host
 from .layers import *
 import random
-
+import os
+import csv
 
 class Network():
     """
@@ -114,7 +115,7 @@ class Network():
         Camada de transporte de aplicação.
 
         Returns:
-            TransportLayer : Camada de transporte de aplicação.
+            ApplicationLayer : Camada de aplicação.
         """
         return self._application
 
@@ -247,9 +248,8 @@ class Network():
         """
         for host_id in self._hosts:
             for i in range(num_qubits):
-                self.physical.create_qubit(host_id)
+                self.physical.create_qubit(host_id, increment_timeslot=False,increment_qubits=False)
         print("Hosts inicializados")    
-
 
     def start_channels(self):
         """
@@ -265,7 +265,6 @@ class Network():
             self._graph.edges[edge]['eprs'] = list()
         print("Canais inicializados")
         
-
     def start_eprs(self, num_eprs: int = 10):
         """
         Inicializa os pares EPRs nas arestas da rede.
@@ -275,13 +274,89 @@ class Network():
         """
         for edge in self.edges:
             for i in range(num_eprs):
-                epr = self.physical.create_epr_pair()
+                epr = self.physical.create_epr_pair(increment_timeslot=False,increment_eprs=False)
                 self._graph.edges[edge]['eprs'].append(epr)
                 self.logger.debug(f'Par EPR {epr} adicionado ao canal.')
         print("Pares EPRs adicionados")
+
+    def get_total_timeslot(self):
+        """
+        Retorna a soma dos timeslots de todas as camadas da rede.
+
+        Returns:
+            int : Soma dos timeslots de todas as camadas.
+        """
+        total_timeslot = (self._physical.get_timeslot() +
+                          self._link.get_timeslot() +
+                          self._network.get_timeslot() +
+                          self._transport.get_timeslot() +
+                          self._application.get_timeslot())
         
-        
-        
-        
-        
-        
+        return total_timeslot
+    
+    def get_total_useds_eprs(self):
+        total_eprs = (self._physical.get_used_eprs()+
+                      self._link.get_used_eprs() +
+                      self._network.get_used_eprs()
+        )
+        return total_eprs
+    
+    def get_total_useds_qubits(self):
+        total_qubits = (self._physical.get_used_qubits() +
+                        self._link.get_used_qubits() +
+                        self._transport.get_used_qubits() +
+                        self._application.get_used_qubits()
+                     
+        )
+        return total_qubits
+
+    def get_metrics(self, metrics_requested=None, output_type="csv", file_name="metrics_output.csv"):
+            """
+            Obtém as métricas da rede conforme solicitado e as exporta, printa ou armazena.
+            
+            Args:
+                metrics_requested: Lista de métricas a serem retornadas (opcional). 
+                                Se None, todas as métricas serão consideradas.
+                output_type: Especifica como as métricas devem ser retornadas.
+                            "csv" para exportar em arquivo CSV (padrão),
+                            "print" para exibir no console,
+                            "variable" para retornar as métricas em uma variável.
+                file_name: Nome do arquivo CSV (usado somente quando output_type="csv").
+            
+            Returns:
+                Se output_type for "variable", retorna um dicionário com as métricas solicitadas.
+            """
+            # Dicionário com todas as métricas possíveis
+            available_metrics = {
+                "Timeslot Total": self.get_total_timeslot(),
+                "EPRs Usados": self.get_total_useds_eprs(),
+                "Qubits Usados": self.get_total_useds_qubits(),
+                "Fidelidade na Camada de Transporte": self.transportlayer.avg_fidelity_on_transportlayer(),
+                "Fidelidade na Camada de Enlace": self.linklayer.avg_fidelity_on_linklayer(),
+                "Média de Rotas": self.networklayer.get_avg_size_routes()
+            }
+            
+            # Se não foram solicitadas métricas específicas, use todas
+            if metrics_requested is None:
+                metrics_requested = available_metrics.keys()
+            
+            # Filtra as métricas solicitadas
+            metrics = {metric: available_metrics[metric] for metric in metrics_requested if metric in available_metrics}
+
+            # Tratamento conforme o tipo de saída solicitado
+            if output_type == "print":
+                for metric, value in metrics.items():
+                    print(f"{metric}: {value}")
+            elif output_type == "csv":
+                current_directory = os.getcwd()
+                file_path = os.path.join(current_directory, file_name)
+                with open(file_path, mode='w', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['Métrica', 'Valor'])
+                    for metric, value in metrics.items():
+                        writer.writerow([metric, value])
+                print(f"Métricas exportadas com sucesso para {file_path}")
+            elif output_type == "variable":
+                return metrics
+            else:
+                raise ValueError("Tipo de saída inválido. Escolha entre 'print', 'csv' ou 'variable'.")
