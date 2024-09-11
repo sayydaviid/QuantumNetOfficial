@@ -17,7 +17,6 @@ class NetworkLayer:
         self._physical_layer = physical_layer
         self._link_layer = link_layer
         self.logger = Logger.get_instance()
-        self.timeslot = 0  # Inicializa o contador de timeslots
         self.avg_size_routes = 0  # Inicializa o tamanho médio das rotas
         self.used_eprs = 0  # Inicializa o contador de EPRs utilizados
         self.used_qubits = 0  # Inicializa o contador de Qubits utilizados
@@ -28,10 +27,6 @@ class NetworkLayer:
         returns:
             str : Representação em string da camada de rede."""
         return 'Network Layer'
-    
-    def get_timeslot(self):
-        self.logger.debug(f"Timeslot atual na camada {self.__class__.__name__}: {self.timeslot}")
-        return self.timeslot
 
     def get_used_eprs(self):
         """Retorna a contagem de EPRs utilizados na camada de rede."""
@@ -42,7 +37,7 @@ class NetworkLayer:
         self.logger.debug(f"Qubits usados na camada {self.__class__.__name__}: {self.used_qubits}")
         return self.used_qubits
 
-    def short_route_valid(self, Alice: int, Bob: int) -> list:
+    def short_route_valid(self, Alice: int, Bob: int, increment_timeslot=True) -> list:
         """
         Escolhe a melhor rota entre dois hosts com critérios adicionais.
         
@@ -53,6 +48,11 @@ class NetworkLayer:
         returns:
             list or None: Lista com a melhor rota entre os hosts ou None se não houver rota válida.
         """
+        if increment_timeslot:
+            self._network.timeslot()  # Incrementa o timeslot sempre que uma rota é verificada
+            self.logger.log(f'Timeslot {self._network.get_timeslot()}: Buscando rota válida entre {Alice} e {Bob}.')
+
+
         if Alice is None or Bob is None:
             self.logger.log('IDs de hosts inválidos fornecidos.')
             return None
@@ -89,6 +89,7 @@ class NetworkLayer:
         self.logger.log('Nenhuma rota válida encontrada.')
         return None
 
+
     def entanglement_swapping(self, Alice: int = None, Bob: int = None) -> bool:
         """
         Realiza o Entanglement Swapping em toda a rota determinada pelo short_route_valid.
@@ -100,7 +101,6 @@ class NetworkLayer:
         returns:
             bool: True se todos os Entanglement Swappings foram bem-sucedidos, False caso contrário.
         """
-
         # Obtém a rota válida entre Alice e Bob usando a função short_route_valid
         route = self.short_route_valid(Alice, Bob)
         
@@ -115,8 +115,10 @@ class NetworkLayer:
 
         # Itera sobre a rota realizando o entanglement swapping para cada segmento da rota
         while len(route) > 1:
-            # Incrementa o timeslot para cada operação de entanglement swapping
-            self.timeslot += 1
+            # Incrementa o timeslot antes de cada operação de entanglement swapping
+            self._network.timeslot()
+            self.logger.log(f'Timeslot {self._network.get_timeslot()}: Realizando Entanglement Swapping.')
+
             node1 = route[0]    # Primeiro nó na rota
             node2 = route[1]    # Segundo nó na rota
             node3 = route[2] if len(route) > 2 else None  # Terceiro nó na rota (se existir)
@@ -187,7 +189,7 @@ class NetworkLayer:
         # Loga o sucesso do entanglement swapping
         self.logger.log(f'Entanglement Swapping concluído com sucesso entre {Alice} e {Bob}')
         return True
-    
+
     def get_avg_size_routes(self):
         """
         Calcula o tamanho médio das rotas entre todos os pares de nós no grafo.
@@ -203,7 +205,7 @@ class NetworkLayer:
             for node2 in self._network.graph.nodes:
                 if node1 != node2:
                     # Obtém a rota mais curta entre node1 e node2
-                    route = self.short_route_valid(node1, node2)
+                    route = self.short_route_valid(node1, node2, increment_timeslot=False)
                     
                     # Se uma rota válida for encontrada, soma o comprimento da rota
                     if route is not None:
