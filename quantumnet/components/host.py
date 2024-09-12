@@ -50,16 +50,6 @@ class Host():
         """
         return self._memory
     
-    @property
-    def routing_table(self):
-        """
-        Tabela de roteamento do host.
-
-        Returns:
-            dict : Tabela de roteamento.
-        """
-        return self._routing_table
-    
     def get_last_qubit(self):
         """
         Retorna o último qubit da memória.
@@ -86,9 +76,7 @@ class Host():
             raise Exception('O valor fornecido para host_id_for_connection deve ser um inteiro.')
         
         if host_id_for_connection not in self.connections:
-            self.connections.append(host_id_for_connection)
-        
-        print("AAAAAAA")
+            self.connections.append(host_id_for_connection),
 
     def add_qubit(self, qubit: Qubit):
         """
@@ -101,33 +89,3 @@ class Host():
         self.memory.append(qubit)
         Logger.get_instance().debug(f'Qubit {qubit.qubit_id} adicionado à memória do Host {self.host_id}.')
 
-    def set_routing_table(self, routing_table: dict):
-        """
-        Define a tabela de roteamento do host.
-
-        Args:
-            routing_table (dict): Tabela de roteamento.
-        """
-        
-        self._routing_table = routing_table
-        
-    def info(self):
-        """
-        Retorna informações sobre o host.
-
-        Returns:
-            dict : Informações sobre o host.
-        """
-        
-        return {
-            'host_id': self.host_id,
-            'memory': len(self.memory),
-            'routing_table': "No registration" if self.routing_table == None else self.routing_table
-        }
-    
-    def announce_to_controller_app_has_finished(self):
-        """
-        Informa ao controlador que a aplicação terminou.
-        """
-        
-        print(f'Host {self.host_id} informou ao controlador que a aplicação terminou.')

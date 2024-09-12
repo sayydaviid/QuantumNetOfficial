@@ -27,6 +27,7 @@ class Network():
         #minimo e maximo
         self.max_prob = 1
         self.min_prob = 0.2
+        self.timeslot_total = 0
 
     @property
     def hosts(self):
@@ -279,21 +280,23 @@ class Network():
                 self.logger.debug(f'Par EPR {epr} adicionado ao canal.')
         print("Pares EPRs adicionados")
 
-    def get_total_timeslot(self):
+        
+    def timeslot(self):
         """
-        Retorna a soma dos timeslots de todas as camadas da rede.
+        Incrementa o timeslot da rede.
+        """
+        self.timeslot_total += 1
+
+
+    def get_timeslot(self):
+        """
+        Retorna o timeslot atual da rede.
 
         Returns:
-            int : Soma dos timeslots de todas as camadas.
+            int : Timeslot atual da rede.
         """
-        total_timeslot = (self._physical.get_timeslot() +
-                          self._link.get_timeslot() +
-                          self._network.get_timeslot() +
-                          self._transport.get_timeslot() +
-                          self._application.get_timeslot())
-        
-        return total_timeslot
-    
+        return self.timeslot_total
+
     def get_total_useds_eprs(self):
         total_eprs = (self._physical.get_used_eprs()+
                       self._link.get_used_eprs() +
@@ -328,7 +331,7 @@ class Network():
             """
             # Dicionário com todas as métricas possíveis
             available_metrics = {
-                "Timeslot Total": self.get_total_timeslot(),
+                "Timeslot Total": self.get_timeslot(),
                 "EPRs Usados": self.get_total_useds_eprs(),
                 "Qubits Usados": self.get_total_useds_qubits(),
                 "Fidelidade na Camada de Transporte": self.transportlayer.avg_fidelity_on_transportlayer(),

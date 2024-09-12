@@ -20,26 +20,36 @@ class ApplicationLayer:
         self._link_layer = link_layer
         self._transport_layer = transport_layer
         self.logger = Logger.get_instance()
-        self.timeslot = 0  # Inicializa o contador de timeslots
         self.used_qubits = 0
-        
+
     def __str__(self):
         return 'Application Layer'
-    
-    def get_timeslot(self):
-        """Retorna o timeslot atual da camada de aplicação"""
-        self.logger.debug(f"Timeslot atual na camada {self.__class__.__name__}: {self.timeslot}")
-        return self.timeslot
     
     def get_used_qubits(self):
         """Retorna o número de qubits usados"""
         self.logger.debug(f"Qubits usados na camada {self.__class__.__name__}: {self.used_qubits}")
         return self.used_qubits
     
+    def run_app(self, app_name, *args):
+        """
+        Executa a aplicação desejada informando o nome fornecido.
+
+        Args:
+            app_name (str): O nome da aplicação a ser executada.
+            *args: Argumentos variáveis para a aplicação específica, que são alice_id, bob_id e num_qubits.
+        """
+        if app_name == "QKD_E91":
+            alice_id, bob_id, num_qubits = args
+            return self.qkd_e91_protocol(alice_id,bob_id, num_qubits)
+        else:
+            self.logger.log(f"Aplicação não realizada ou não encontrada.")
+            return False
+    
+
     def prepare_e91_qubits(self, key, bases):
         """Prepara qubits para o protocolo E91 de acordo com a chave e as bases fornecidas."""
-        self.timeslot += 1  # Incrementa o timeslot
-        self.logger.debug(f"Timeslot incrementado na função prepare_e91_qubits: {self.timeslot}")
+        self._network.timeslot()  # Incrementa o timeslot
+        self.logger.debug(f"Timeslot incrementado na função prepare_e91_qubits: {self._network.get_timeslot()}")
         qubits = []
         for bit, base in zip(key, bases):
             qubit = Qubit(qubit_id=random.randint(0, 1000))  # Cria um novo qubit com ID aleatório
@@ -52,8 +62,8 @@ class ApplicationLayer:
 
     def apply_bases_and_measure_e91(self, qubits, bases):
         """Aplica as bases de medição e mede os qubits no protocolo E91."""
-        self.timeslot += 1  # Incrementa o timeslot
-        self.logger.debug(f"Timeslot incrementado na função apply_bases_and_measure_e91: {self.timeslot}")
+        self._network.timeslot()  # Incrementa o timeslot
+        self.logger.debug(f"Timeslot incrementado na função apply_bases_and_measure_e91: {self._network.get_timeslot()}")
         results = []
         for qubit, base in zip(qubits, bases):
             if base == 1:
@@ -95,20 +105,22 @@ class ApplicationLayer:
 
             # Etapa 5: Verificação se as chaves coincidem
             for a, b in zip(shared_key_alice, shared_key_bob):
-                if a == b:
-                    final_key.append(a)  # Adiciona à chave final apenas os bits que coincidem
+                if a == b and len(final_key) < num_bits:  # Limita o tamanho da chave final
+                    final_key.append(a)
 
             # Etapa 6: Transmissão dos qubits coincidentes de Alice para Bob
             if final_key:
-                self.logger.log(f'Transmitindo qubits coincidentes de Alice (ID {alice_id}) para Bob (ID {bob_id}).')
-                success = self._transport_layer.run_transport_layer(alice_id, bob_id, len(final_key))
+                qubits_to_transmit = final_key[:num_bits]  # Limita ao número necessário
+                self.logger.log(f'Transmitindo {len(qubits_to_transmit)} qubits coincidentes de Alice (ID {alice_id}) para Bob (ID {bob_id}).')
+                success = self._transport_layer.run_transport_layer(alice_id, bob_id, len(qubits_to_transmit))
                 if not success:
                     self.logger.log(f'Falha na transmissão dos qubits coincidentes.')
                     return None
 
+
                 # Incrementa o timeslot após a transmissão dos qubits coincidentes
-                self.timeslot += 1
-                self.logger.debug(f"Timeslot incrementado após transmissão: {self.timeslot}")
+                self._network.timeslot()
+                self.logger.debug(f"Timeslot incrementado após transmissão: {self._network.get_timeslot()}")
 
             self.logger.log(f"Chaves obtidas até agora: {final_key}")
 
@@ -118,13 +130,3 @@ class ApplicationLayer:
                 return final_key
 
         return None
-
-
-
-
-
-
-
-
-
-
