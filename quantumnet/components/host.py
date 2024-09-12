@@ -12,7 +12,8 @@ class Host():
         self._max_qubits_create = max_qubits_create
         self._probability_on_demand_qubit_create = probability_on_demand_qubit_create
         self._probability_replay_qubit_create = probability_replay_qubit_create
-        self._routing_table = None
+        self._routing_table = {}
+        self._routing_table[host_id] = [host_id]
         # Sobre a execução
         self.logger = Logger.get_instance()
     
