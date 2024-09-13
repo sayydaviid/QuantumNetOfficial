@@ -23,7 +23,6 @@ class Qubit():
     def set_current_fidelity(self, new_fidelity: float):
             """Define a fidelidade atual do qubit."""
             self._current_fidelity = new_fidelity
-            print(f"Fidelidade do qubit {self.qubit_id} atualizada para {new_fidelity}")
 
     def apply_x(self):
         """Aplica a porta X (NOT) ao qubit."""
