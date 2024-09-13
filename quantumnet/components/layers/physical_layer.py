@@ -149,24 +149,26 @@ class PhysicalLayer:
         Returns:
             float: Fidelidade do qubit.
         """
-        fidelity = qubit.get_current_fidelity()
-        self.logger.log(f'A fidelidade do qubit {qubit} é {fidelity}')
+        fidelity = qubit.get_current_fidelity()  # Inicializa a variável 'fidelity' no início
+        
+        if self._network.get_timeslot() > 0:
+            # Aplica um fator de decoerência (0.99 neste exemplo)
+            new_fidelity = max(0, fidelity * 0.99)  
+            qubit.set_current_fidelity(new_fidelity)  # Atualiza a fidelidade do qubit
+            self.logger.log(f'A fidelidade atualizada do qubit {qubit.qubit_id} após decoerência é {new_fidelity}')
+            return new_fidelity
+
+        self.logger.log(f'A fidelidade inicial do qubit {qubit.qubit_id} é {fidelity}')
         return fidelity
 
     def fidelity_measurement(self, qubit1: Qubit, qubit2: Qubit):
-        """Mede a fidelidade entre dois qubits.
-
-        Args:
-            qubit1 (Qubit): Qubit 1.
-            qubit2 (Qubit): Qubit 2.
-
-        Returns:
-            float: Fidelidade entre os qubits.
-        """
-        fidelity = qubit1.get_current_fidelity() * qubit2.get_current_fidelity()
-        self.logger.log(f'A fidelidade entre o qubit {qubit1} e o qubit {qubit2} é {fidelity}')
-        return fidelity
-
+        """Mede e aplica a decoerência em dois qubits, e loga o resultado."""
+        fidelity1 = self.fidelity_measurement_only_one(qubit1)
+        fidelity2 = self.fidelity_measurement_only_one(qubit2)
+        combined_fidelity = fidelity1 * fidelity2
+        self.logger.log(f"Fidelidade combinada entre qubit {qubit1.qubit_id} e qubit {qubit2.qubit_id}: {combined_fidelity}.")
+        return combined_fidelity
+    
     def entanglement_creation_heralding_protocol(self, alice: Host, bob: Host):
         """Protocolo de criação de emaranhamento com sinalização.
 

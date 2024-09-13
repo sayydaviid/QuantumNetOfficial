@@ -286,7 +286,7 @@ class Network():
         Incrementa o timeslot da rede.
         """
         self.timeslot_total += 1
-        
+        self.apply_decoherence_to_all_layers()
 
     def get_timeslot(self):
         """
@@ -363,3 +363,27 @@ class Network():
                 return metrics
             else:
                 raise ValueError("Tipo de saída inválido. Escolha entre 'print', 'csv' ou 'variable'.")
+
+
+    def apply_decoherence_to_all_layers(self, decoherence_factor: float = 0.9):
+        """
+        Aplica decoerência a todos os qubits e EPRs nas camadas da rede que já avançaram nos timeslots.
+        Args:
+            decoherence_factor (float): Fator de decoerência a ser aplicado. Deve ser menor que 1 para reduzir a fidelidade.
+        """
+        if self.get_timeslot() > 0:
+
+        # Aplicar decoerência nos qubits de cada host
+            for host_id, host in self.hosts.items():
+                for qubit in host.memory:
+                    current_fidelity = qubit.get_current_fidelity()
+                    new_fidelity = current_fidelity * decoherence_factor
+                    qubit.set_current_fidelity(new_fidelity)
+
+            # Aplicar decoerência nos EPRs em todos os canais (arestas da rede)
+            for edge in self.edges:
+                if 'eprs' in self._graph.edges[edge]:
+                    for epr in self._graph.edges[edge]['eprs']:
+                        current_fidelity = epr.get_current_fidelity()
+                        new_fidelity = current_fidelity * decoherence_factor
+                        epr.set_fidelity(new_fidelity)

@@ -16,3 +16,7 @@ class Epr():
     
     def get_current_fidelity(self):
         return self._current_fidelity
+    
+    def set_fidelity(self, new_fidelity: float):
+        """Define a nova fidelidade do par EPR."""
+        self._current_fidelity = new_fidelity
