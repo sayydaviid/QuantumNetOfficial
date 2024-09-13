@@ -286,7 +286,7 @@ class Network():
         Incrementa o timeslot da rede.
         """
         self.timeslot_total += 1
-
+        
 
     def get_timeslot(self):
         """
