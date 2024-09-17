@@ -20,7 +20,7 @@ class NetworkLayer:
         self.avg_size_routes = 0  # Inicializa o tamanho médio das rotas
         self.used_eprs = 0  # Inicializa o contador de EPRs utilizados
         self.used_qubits = 0  # Inicializa o contador de Qubits utilizados
-
+        self.routes_used = {}  # Inicializa o dicionário de rotas usadas 
     def __str__(self):
         """ Retorna a representação em string da camada de rede. 
         
@@ -40,10 +40,11 @@ class NetworkLayer:
     def short_route_valid(self, Alice: int, Bob: int, increment_timeslot=True) -> list:
         """
         Escolhe a melhor rota entre dois hosts com critérios adicionais.
-        
+
         args:
             Alice (int): ID do host de origem.
             Bob (int): ID do host de destino.
+            increment_timeslot (bool): Indica se o timeslot deve ser incrementado.
             
         returns:
             list or None: Lista com a melhor rota entre os hosts ou None se não houver rota válida.
@@ -52,21 +53,20 @@ class NetworkLayer:
             self._network.timeslot()  # Incrementa o timeslot sempre que uma rota é verificada
             self.logger.log(f'Timeslot {self._network.get_timeslot()}: Buscando rota válida entre {Alice} e {Bob}.')
 
-
         if Alice is None or Bob is None:
             self.logger.log('IDs de hosts inválidos fornecidos.')
             return None
-        
+
         if not self._network.graph.has_node(Alice) or not self._network.graph.has_node(Bob):
             self.logger.log(f'Um dos nós ({Alice} ou {Bob}) não existe no grafo.')
             return None
-        
+
         try:
             all_shortest_paths = list(nx.all_shortest_paths(self._network.graph, Alice, Bob))
         except nx.NetworkXNoPath:
             self.logger.log(f'Sem rota encontrada entre {Alice} e {Bob}')
             return None
-        
+
         for path in all_shortest_paths:
             valid_path = True
             for i in range(len(path) - 1):
@@ -76,18 +76,19 @@ class NetworkLayer:
                     self.logger.log(f'Sem pares EPRs entre {node} e {next_node} na rota {path}')
                     valid_path = False
                     break
-                host = self._network.get_host(node)
-                if len(host.memory) < 2:
-                    self.logger.log(f'Nó {node} não tem pelo menos 2 qubits na rota {path}')
-                    valid_path = False
-                    break
-            
+
             if valid_path:
                 self.logger.log(f'Rota válida encontrada: {path}')
+
+                # Armazena a rota se for a primeira vez que é usada
+                if (Alice, Bob) not in self.routes_used:
+                    self.routes_used[(Alice, Bob)] = path.copy()
+
                 return path
-        
+
         self.logger.log('Nenhuma rota válida encontrada.')
         return None
+
 
 
     def entanglement_swapping(self, Alice: int = None, Bob: int = None) -> bool:
@@ -192,31 +193,24 @@ class NetworkLayer:
 
     def get_avg_size_routes(self):
         """
-        Calcula o tamanho médio das rotas entre todos os pares de nós no grafo.
+        Calcula o tamanho médio das rotas utilizadas, considerando o número de saltos (arestas) entre os nós.
         
         returns:
-            float: Tamanho médio das rotas.
+            float: Tamanho médio das rotas utilizadas.
         """
         total_size = 0
         num_routes = 0
         
-        # Itera sobre todos os pares de nós no grafo
-        for node1 in self._network.graph.nodes:
-            for node2 in self._network.graph.nodes:
-                if node1 != node2:
-                    # Obtém a rota mais curta entre node1 e node2
-                    route = self.short_route_valid(node1, node2, increment_timeslot=False)
-                    
-                    # Se uma rota válida for encontrada, soma o comprimento da rota
-                    if route is not None:
-                        total_size += len(route)
-                        num_routes += 1
+        # Itera sobre as rotas armazenadas no dicionário
+        for route in self.routes_used.values():
+            total_size += len(route) - 1  # Soma o número de arestas (saltos), que é o número de nós menos 1
+            num_routes += 1  # Conta o número de rotas
         
         # Calcula a média, se houver rotas válidas
         if num_routes > 0:
-            self._avg_size_routes = total_size / num_routes
+            self.avg_size_routes = total_size / num_routes
         else:
             # Retorna 0 se não houver rotas válidas
-            self._avg_size_routes = 0.0
+            self.avg_size_routes = 0.0
         
-        return self._avg_size_routes
+        return self.avg_size_routes

@@ -28,6 +28,7 @@ class Network():
         self.max_prob = 1
         self.min_prob = 0.2
         self.timeslot_total = 0
+        self.qubit_timeslots = {}  # Dicionário para armazenar qubits criados e seus timeslots
 
     @property
     def hosts(self):
@@ -297,6 +298,19 @@ class Network():
         """
         return self.timeslot_total
 
+    def register_qubit_creation(self, qubit_id, timeslot):
+        """Registra a criação de um qubit com seu timeslot e camada."""
+        self.qubit_timeslots[qubit_id] = {'timeslot': timeslot}
+        
+    def display_all_qubit_timeslots(self):
+        """Exibe o timeslot de todos os qubits criados em todas as camadas."""
+        if not self.qubit_timeslots:
+            print("Nenhum qubit foi criado.")
+        else:
+            for qubit_id, info in self.qubit_timeslots.items():
+                print(f"Qubit {qubit_id} foi criado no timeslot {info['timeslot']}")
+                
+                
     def get_total_useds_eprs(self):
         total_eprs = (self._physical.get_used_eprs()+
                       self._link.get_used_eprs() +
@@ -364,26 +378,48 @@ class Network():
             else:
                 raise ValueError("Tipo de saída inválido. Escolha entre 'print', 'csv' ou 'variable'.")
 
-
     def apply_decoherence_to_all_layers(self, decoherence_factor: float = 0.9):
         """
         Aplica decoerência a todos os qubits e EPRs nas camadas da rede que já avançaram nos timeslots.
-        Args:
-            decoherence_factor (float): Fator de decoerência a ser aplicado. Deve ser menor que 1 para reduzir a fidelidade.
         """
-        if self.get_timeslot() > 0:
+        current_timeslot = self.get_timeslot()
 
         # Aplicar decoerência nos qubits de cada host
-            for host_id, host in self.hosts.items():
-                for qubit in host.memory:
+        for host_id, host in self.hosts.items():
+            for qubit in host.memory:
+                creation_timeslot = self.qubit_timeslots[qubit.qubit_id]['timeslot']
+                if creation_timeslot < current_timeslot:
                     current_fidelity = qubit.get_current_fidelity()
                     new_fidelity = current_fidelity * decoherence_factor
                     qubit.set_current_fidelity(new_fidelity)
 
-            # Aplicar decoerência nos EPRs em todos os canais (arestas da rede)
-            for edge in self.edges:
-                if 'eprs' in self._graph.edges[edge]:
-                    for epr in self._graph.edges[edge]['eprs']:
-                        current_fidelity = epr.get_current_fidelity()
-                        new_fidelity = current_fidelity * decoherence_factor
-                        epr.set_fidelity(new_fidelity)
+        # Aplicar decoerência nos EPRs em todos os canais (arestas da rede)
+        for edge in self.edges:
+            if 'eprs' in self._graph.edges[edge]:
+                for epr in self._graph.edges[edge]['eprs']:
+                    current_fidelity = epr.get_current_fidelity()
+                    new_fidelity = current_fidelity * decoherence_factor
+                    epr.set_fidelity(new_fidelity)
+
+    # def apply_decoherence_to_all_layers(self, decoherence_factor: float = 0.9):
+    #     """
+    #     Aplica decoerência a todos os qubits e EPRs nas camadas da rede que já avançaram nos timeslots.
+    #     Args:
+    #         decoherence_factor (float): Fator de decoerência a ser aplicado. Deve ser menor que 1 para reduzir a fidelidade.
+    #     """
+    #     if self.get_timeslot() > 0:
+
+    #     # Aplicar decoerência nos qubits de cada host
+    #         for host_id, host in self.hosts.items():
+    #             for qubit in host.memory:
+    #                 current_fidelity = qubit.get_current_fidelity()
+    #                 new_fidelity = current_fidelity * decoherence_factor
+    #                 qubit.set_current_fidelity(new_fidelity)
+
+    #         # Aplicar decoerência nos EPRs em todos os canais (arestas da rede)
+    #         for edge in self.edges:
+    #             if 'eprs' in self._graph.edges[edge]:
+    #                 for epr in self._graph.edges[edge]['eprs']:
+    #                     current_fidelity = epr.get_current_fidelity()
+    #                     new_fidelity = current_fidelity * decoherence_factor
+    #                     epr.set_fidelity(new_fidelity)

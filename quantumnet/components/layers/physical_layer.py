@@ -90,6 +90,10 @@ class PhysicalLayer:
         qubit_id = self._count_qubit
         qubit = Qubit(qubit_id)
         self._network.hosts[host_id].add_qubit(qubit)
+        
+        current_timeslot = self._network.get_timeslot()
+        self._network.register_qubit_creation(qubit_id, current_timeslot)
+    
         self._count_qubit += 1
         self.logger.debug(f'Qubit {qubit_id} criado com fidelidade inicial {qubit.get_initial_fidelity()} e adicionado à memória do Host {host_id}.')
 
