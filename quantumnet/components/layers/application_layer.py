@@ -40,11 +40,10 @@ class ApplicationLayer:
         """
         if app_name == "QKD_E91":
             alice_id, bob_id, num_qubits = args
-            return self.qkd_e91_protocol(alice_id,bob_id, num_qubits)
+            return self.qkd_e91_protocol(alice_id, bob_id, num_qubits)
         else:
             self.logger.log(f"Aplicação não realizada ou não encontrada.")
             return False
-    
 
     def prepare_e91_qubits(self, key, bases):
         """Prepara qubits para o protocolo E91 de acordo com a chave e as bases fornecidas."""
@@ -84,44 +83,44 @@ class ApplicationLayer:
             self.used_qubits += num_qubits
             self.logger.log(f'Iniciando protocolo E91 com {num_qubits} qubits.')
 
-            # Etapa 1: Alice prepara os qubits
+            # Etapa 1: Verificar se Alice tem qubits suficientes e, se necessário, criar mais
+            if not self._transport_layer.run_transport_layer(alice_id, bob_id, num_qubits):
+                self.logger.log(f'Falha ao garantir que Alice tenha {num_qubits} qubits.')
+                return None
+
+            # Etapa 2: Alice prepara os qubits
             key = [random.choice([0, 1]) for _ in range(num_qubits)]  # Gera uma chave aleatória de bits
             bases_alice = [random.choice([0, 1]) for _ in range(num_qubits)]  # Gera bases de medição aleatórias para Alice
             qubits = self.prepare_e91_qubits(key, bases_alice)  # Prepara os qubits com base na chave e nas bases
             self.logger.log(f'Qubits preparados com a chave: {key} e bases: {bases_alice}')
 
-            # Etapa 2: Bob escolhe bases aleatórias e mede os qubits
+            # Etapa 3: Bob escolhe bases aleatórias e mede os qubits
             bases_bob = [random.choice([0, 1]) for _ in range(num_qubits)]  # Gera bases de medição aleatórias para Bob
             results_bob = self.apply_bases_and_measure_e91(qubits, bases_bob)  # Bob mede os qubits usando suas bases
             self.logger.log(f'Resultados das medições: {results_bob} com bases: {bases_bob}')
 
-            # Etapa 3: Alice e Bob compartilham suas bases e encontram os índices comuns
+            # Etapa 4: Alice e Bob compartilham suas bases e encontram os índices comuns
             common_indices = [i for i in range(len(bases_alice)) if bases_alice[i] == bases_bob[i]]  # Índices onde as bases coincidem
             self.logger.log(f'Índices comuns: {common_indices}')
 
-            # Etapa 4: Extração da chave com base nos índices comuns
+            # Etapa 5: Extração da chave com base nos índices comuns
             shared_key_alice = [key[i] for i in common_indices]  # Chave compartilhada gerada por Alice
             shared_key_bob = [results_bob[i] for i in common_indices]  # Chave compartilhada gerada por Bob
 
-            # Etapa 5: Verificação se as chaves coincidem
+            # Etapa 6: Verificação se as chaves coincidem
             for a, b in zip(shared_key_alice, shared_key_bob):
                 if a == b and len(final_key) < num_bits:  # Limita o tamanho da chave final
                     final_key.append(a)
 
-            # Etapa 6: Transmissão dos qubits coincidentes de Alice para Bob
-            if final_key:
-                qubits_to_transmit = final_key[:num_bits]  # Limita ao número necessário
-                self.logger.log(f'Transmitindo {len(qubits_to_transmit)} qubits coincidentes de Alice (ID {alice_id}) para Bob (ID {bob_id}).')
-                success = self._transport_layer.run_transport_layer(alice_id, bob_id, len(qubits_to_transmit))
-                if not success:
-                    self.logger.log(f'Falha na transmissão dos qubits coincidentes.')
-                    return None
+            # Etapa 7: Transmissão dos qubits coincidentes de Alice para Bob
+            qubits_to_transmit = final_key[:num_bits]  # Limita ao número necessário
+            self.logger.log(f'Transmitindo {len(qubits_to_transmit)} qubits coincidentes de Alice (ID {alice_id}) para Bob (ID {bob_id}).')
+            if not self._transport_layer.run_transport_layer(alice_id, bob_id, len(qubits_to_transmit)):
+                self.logger.log(f'Falha na transmissão dos qubits coincidentes.')
+                return None
 
-
-                # Incrementa o timeslot após a transmissão dos qubits coincidentes
-                self._network.timeslot()
-                self.logger.debug(f"Timeslot incrementado após transmissão: {self._network.get_timeslot()}")
-
+            self._network.timeslot()
+            self.logger.debug(f"Timeslot incrementado após transmissão: {self._network.get_timeslot()}")
             self.logger.log(f"Chaves obtidas até agora: {final_key}")
 
             if len(final_key) >= num_bits:
